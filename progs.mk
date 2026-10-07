@@ -26,27 +26,28 @@
 # SRCS.p1 = p1a.c p1b.cc
 #
 # $ gmake -n
-# cc  -c -MT obj/p1a.c.o  -MMD -MP -MF obj/p1a.c.deps  p1a.c  -o obj/p1a.c.o
-# c++ -c -MT obj/p1b.cc.o -MMD -MP -MF obj/p1b.cc.deps p1b.cc -o obj/p1b.cc.o
-# c++ obj/p1a.c.o obj/p1b.cc.o -o p1
-# cc -c -MT obj/p2.c.o -MMD -MP -MF obj/p2.c.deps p2.c -o obj/p2.c.o
-# cc obj/p2.c.o  -o p2
+# cc  -c -MT obj/p1.p1a.c.o  -MMD -MP -MF obj/p1.p1a.c.deps  p1a.c  -o obj/p1.p1a.c.o
+# c++ -c -MT obj/p1.p1b.cc.o -MMD -MP -MF obj/p1.p1b.cc.deps p1b.cc -o obj/p1.p1b.cc.o
+# c++ obj/p1.p1a.c.o obj/p1.p1b.cc.o -o p1
+# cc -c -MT obj/p1.p2.c.o -MMD -MP -MF obj/p2.p2.c.deps p2.c -o obj/p2.p2.c.o
+# cc obj/p2.p2.c.o  -o p2
 #
 # We can define parameters that will be chosen in order of priority
 # (leftmost has the highest priority):
-# CFLAGS.$s     CFLAGS.$p       CFLAGS
-# CXXFLAGS.$s   CXXFLAGS.$p     CXXFLAGS
-# CPPFLAGS.$s   CPPFLAGS.$p     CPPFLAGS
-#               LDFLAGS.$p      LDFLAGS
-#               LDLIBS.$p       LDLIBS
-# CC.$s         CC.$p           CC
-# CXX.$s        CXX.$p          CXX
-#               LD.$p           CC or CXX
+# CFLAGS.$p.$s     CFLAGS.$p       CFLAGS
+# CXXFLAGS.$p.$s   CXXFLAGS.$p     CXXFLAGS
+# CPPFLAGS.$p.$s   CPPFLAGS.$p     CPPFLAGS
+#                  LDFLAGS.$p      LDFLAGS
+#                  LDLIBS.$p       LDLIBS
+# CC.$p.$s         CC.$p           CC
+# CXX.$p.$s        CXX.$p          CXX
+#                  LD.$p           CC or CXX
 # where p is the program name, s is the source file name.
 #
 # PROGS = p1 p2
+# SRCS = common.c
 # SRCS.p1 = p1a.c p1b.cc
-# CFLAGS.p1a.c = $(CFLAGS.p1) -O6
+# CFLAGS.p1.p1a.c = $(CFLAGS.p1) -O6
 # LDLIBS.p1 = -lm
 #
 # $ gmake -n
@@ -102,9 +103,10 @@ $(strip
 
 	$(foreach p,$(PROGS),
 		$(if $(SRCS.$p),,$(eval SRCS.$p := $(wildcard $p.c $p.cc)))
+		$(eval SRCS.$p += $(SRCS))
 		$(#info SRCS.$p = $(value SRCS.$p))
 
-		$(eval OBJS.$p += $(addprefix $(OBJDIR)/,$(addsuffix .o,$(SRCS.$p))))
+		$(eval OBJS.$p += $(addprefix $(OBJDIR)/$p.,$(addsuffix .o,$(SRCS.$p))))
 		$(#info OBJS.$p = $(value OBJS.$p))
 		$(eval OBJS += $(OBJS.$p))
 
@@ -112,11 +114,11 @@ $(strip
 		$(#info DEPS.$p = $(value DEPS.$p))
 		$(eval DEPS += $(DEPS.$p))
 
-		$(if $(CFLAGS.$p),,$(eval CFLAGS.$p = $$(CFLAGS)))
-		$(if $(CXXFLAGS.$p),,$(eval CXXFLAGS.$p = $$(CXXFLAGS)))
-		$(if $(CPPFLAGS.$p),,$(eval CPPFLAGS.$p = $$(CPPFLAGS)))
-                $(if $(LDFLAGS.$p),,$(eval LDFLAGS.$p = $$(LDFLAGS)))
-                $(if $(LDLIBS.$p),,$(eval LDLIBS.$p = $$(LDLIBS)))
+		$(eval CFLAGS.$p = $(CFLAGS) $(CFLAGS.$p))
+		$(eval CXXFLAGS.$p = $(CXXFLAGS) $(CXXFLAGS.$p))
+		$(eval CPPFLAGS.$p = $(CPPFLAGS) $(CPPFLAGS.$p))
+		$(eval LDFLAGS.$p = $(LDFLAGS) $(LDFLAGS.$p))
+		$(eval LDLIBS.$p = $(LDLIBS) $(LDLIBS.$p))
 
 		$(if $(CC.$p),,$(eval CC.$p = $(CC)))
 		$(#info CC.$p = $(CC.$p))
@@ -134,19 +136,20 @@ $(strip
 		$(#info LD.$p = $(LD.$p))
 
 		$(foreach s,$(SRCS.$p),
-			$(if $(CFLAGS.$s),,$(eval CFLAGS.$s = $$(CFLAGS.$p)))
-			$(if $(CXXFLAGS.$s),,$(eval CXXFLAGS.$s = $$(CXXFLAGS.$p)))
-			$(if $(CPPFLAGS.$s),,$(eval CPPFLAGS.$s = $$(CPPFLAGS.$p)))
+			$(eval CFLAGS.$p.$s = $(CFLAGS.$p) $(CFLAGS.$p.$s))
+			$(eval CXXFLAGS.$p.$s = $(CXXFLAGS.$p) $(CXXFLAGS.$p.$s))
+			$(eval CPPFLAGS.$p.$s = $(CPPFLAGS.$p) $(CPPFLAGS.$p.$s))
 			$(if $(filter %.c,$s),
-				$(if $(CC.$s),,$(eval CC.$s = $(CC.$p)))
-				$(eval COMPILE.$s = $$(CC.$s) -c $$(CFLAGS.$s))
+                                $(if $(CC.$p.$s),,$(eval CC.$p.$s = $(CC.$p)))
+                                $(eval COMPILE.$p.$s = $$(CC.$p.$s) -c $$(CFLAGS.$p.$s))
 			,
-				$(if $(CXX.$s),,$(eval CXX.$s = $(CXX.$p)))
-				$(eval COMPILE.$s = $$(CXX.$s) -c $$(CXXFLAGS.$s))
+                                $(if $(CXX.$p.$s),,$(eval CXX.$p.$s = $(CXX.$p)))
+                                $(eval COMPILE.$p.$s = $$(CXX.$p.$s) -c $$(CXXFLAGS.$p.$s))
 			)
-			$(eval COMPILE.$s += $$(CPPFLAGS.$s) $$(DEPFLAGS))
-			$(#info COMPILE.$s = $(value COMPILE.$s))
-			$(eval $(OBJDIR)/$s.o: $s | $(OBJDIR); $$(COMPILE.$s) $$< -o $$@)
+                        $(eval COMPILE.$p.$s += $$(CPPFLAGS.$p.$s) $$(DEPFLAGS))
+                        $(#info COMPILE.$p.$s = $(value COMPILE.$p.$s))
+                        $(eval $(OBJDIR)/$p.$s.o: $s | $(OBJDIR); $$(COMPILE.$p.$s) $$< -o $$@)
+
 		)
 		$(eval $p: $(OBJS.$p); $$(LD.$p) $$(LDFLAGS.$p) $$^ $$(LDLIBS.$p) -o $$@)
 
